@@ -70,6 +70,16 @@ Claude Code  ◀──GET────────── ~/.tether/bridge.sock �
 To revoke pairing, delete `~/.tether/token` and restart the bridge
 (`pkill -f tether.*daemon.mjs`; the next session starts a new one).
 
+## Analytics
+
+Tether itself sends nothing anywhere. Two things are measured, both outside the tool:
+
+- **The site** counts page views, scroll depth, install-command copies and
+  clicks to GitHub with PostHog, cookieless and without session recording.
+- **GitHub traffic** (clones, views, referrers, stars) is copied into the same
+  PostHog project once a day by `.github/workflows/traffic.yml`, because GitHub
+  only keeps 14 days of it.
+
 ## Development
 
 ```

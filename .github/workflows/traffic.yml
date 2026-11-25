@@ -1,0 +1,19 @@
+name: Traffic to PostHog
+on:
+  schedule:
+    - cron: '17 3 * * *'   # daily; GitHub keeps traffic for 14 days, so missed runs catch up
+  workflow_dispatch:
+permissions: {}
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    if: ${{ vars.POSTHOG_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/traffic-to-posthog.mjs
+        env:
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
