@@ -1,0 +1,200 @@
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: var(--figma-color-bg, #fff);
+    --fg: var(--figma-color-text, #1d1d1f);
+    --muted: var(--figma-color-text-secondary, rgba(0, 0, 0, .55));
+    --faint: var(--figma-color-text-tertiary, rgba(0, 0, 0, .35));
+    --card: var(--figma-color-bg-secondary, #f5f5f7);
+    --line: var(--figma-color-border, rgba(0, 0, 0, .08));
+    --accent: var(--figma-color-bg-brand, #0d99ff);
+    --on-accent: var(--figma-color-text-onbrand, #fff);
+    --ok: #30d158;
+    --warn: #ff9f0a;
+    --bad: #ff453a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); }
+  body {
+    font: 12px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { padding: 14px 14px 12px; }
+
+  header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .mark { width: 18px; height: 18px; flex: none; color: var(--fg); }
+  .title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; flex: 1; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px 3px 7px; border-radius: 999px;
+    font-size: 11px; font-weight: 500; color: var(--muted);
+    background: var(--card);
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); position: relative; }
+  [data-state="live"] .pill .dot { background: var(--ok); }
+  [data-state="live"] .pill .dot::after {
+    content: ""; position: absolute; inset: -3px; border-radius: 50%;
+    background: var(--ok); opacity: .35; animation: breathe 2.4s ease-in-out infinite;
+  }
+  [data-state="unpaired"] .pill .dot { background: var(--warn); }
+  [data-state="offline"] .pill .dot, [data-state="rejected"] .pill .dot { background: var(--bad); }
+  @keyframes breathe { 0%, 100% { transform: scale(.6); opacity: 0; } 50% { transform: scale(1.2); opacity: .35; } }
+
+  .card {
+    background: var(--card); border-radius: 12px; padding: 12px 12px 11px;
+    animation: rise 220ms cubic-bezier(.2, .8, .2, 1);
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+  .eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+  .layer { font-size: 14px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { margin-top: 3px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty { color: var(--muted); }
+  .copy { color: var(--muted); margin: 0 0 10px; }
+  code { font: 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--bg); padding: 1px 5px; border-radius: 5px; color: var(--fg); }
+
+  form { display: flex; gap: 6px; }
+  input {
+    flex: 1; min-width: 0; height: 30px; padding: 0 10px;
+    font: 11px ui-monospace, "SF Mono", Menlo, monospace; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; outline: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  input::placeholder { font-family: -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif; color: var(--faint); }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  input[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent); }
+  .error { color: var(--bad); font-size: 11px; margin-top: 6px; min-height: 0; }
+  .error:empty { display: none; }
+
+  button {
+    font: inherit; font-weight: 600; cursor: pointer; border: 0;
+    transition: transform 100ms ease-out, opacity 120ms ease;
+  }
+  button:active { transform: scale(.97); }
+  .primary { height: 30px; padding: 0 14px; border-radius: 8px; background: var(--accent); color: var(--on-accent); }
+  .primary:disabled { opacity: .4; cursor: default; transform: none; }
+  .link { background: none; padding: 0; color: var(--muted); font-weight: 500; }
+  .link:hover { color: var(--fg); }
+
+  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; color: var(--faint); font-size: 11px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
+    [data-state="live"] .pill .dot::after { animation: none; opacity: 0; }
+    button:active { transform: none; }
+  }
+</style>
+
+<div id="app" data-state="starting">
+  <header>
+    <svg class="mark" viewBox="0 0 18 18" aria-hidden="true">
+      <circle cx="4.5" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="13.5" cy="9" r="3" fill="currentColor"/>
+      <path d="M7.5 9h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <span class="title">Tether</span>
+    <span class="pill"><span class="dot"></span><span id="pill">Starting</span></span>
+  </header>
+  <main id="main"></main>
+  <footer>
+    <span>Read-only · stays on this Mac</span>
+    <button class="link" id="unpair" hidden>Unpair</button>
+  </footer>
+</div>
+
+<script>
+  const BRIDGE = 'http://localhost:47821/selection';
+  const TOKEN = /^[0-9a-f]{32}$/;
+  const $ = id => document.getElementById(id);
+  const app = $('app');
+  let token = null;
+  let rendered = '';
+
+  const el = (tag, props = {}, ...kids) => {
+    const node = Object.assign(document.createElement(tag), props);
+    node.append(...kids.filter(k => k != null));
+    return node;
+  };
+
+  const pretty = type => type.charAt(0) + type.slice(1).toLowerCase().replace(/_/g, ' ');
+
+  function selectionCard(snap) {
+    const n = snap.selectionCount;
+    if (!n) return el('div', { className: 'card' }, el('div', { className: 'empty' }, 'Select a layer to hand it to your agent.'));
+    const first = snap.selection[0];
+    const title = n === 1 ? (first.name || pretty(first.type)) : `${n} layers`;
+    const meta = n === 1 ? `${pretty(first.type)} · ${snap.page.name}` : `${snap.selection.slice(0, 3).map(s => s.name).join(', ')}${n > 3 ? '…' : ''}`;
+    return el('div', { className: 'card' },
+      el('div', { className: 'eyebrow' }, 'Shared with your agent'),
+      el('div', { className: 'layer', title }, title),
+      el('div', { className: 'meta', title: meta }, meta));
+  }
+
+  function pairCard(before, after) {
+    const input = el('input', { id: 'token', placeholder: 'Paste pairing token', autocomplete: 'off', spellcheck: false });
+    const button = el('button', { className: 'primary', type: 'submit', disabled: true }, 'Pair');
+    const err = el('div', { className: 'error' });
+    input.oninput = () => { button.disabled = !input.value.trim(); input.removeAttribute('aria-invalid'); err.textContent = ''; };
+    const form = el('form', {}, input, button);
+    form.onsubmit = ev => {
+      ev.preventDefault();
+      const value = input.value.trim();
+      if (!TOKEN.test(value)) { input.setAttribute('aria-invalid', 'true'); err.textContent = 'A token is 32 letters and numbers.'; return; }
+      token = value;
+      parent.postMessage({ pluginMessage: { type: 'save-token', token } }, '*');
+    };
+    setTimeout(() => input.focus(), 0);
+    const copy = el('p', { className: 'copy' });
+    copy.append(before, el('code', {}, '/tether-pair'), after);
+    return el('div', { className: 'card' }, copy, form, err);
+  }
+
+  function offlineCard() {
+    const copy = el('p', { className: 'copy', style: 'margin:0' });
+    copy.append('Open a Claude Code session with Tether installed. It starts the bridge for you.');
+    return el('div', { className: 'card' }, el('div', { className: 'layer', style: 'font-size:13px' }, 'Bridge offline'), copy);
+  }
+
+  // Only rebuild when something visible changed, so the token field keeps
+  // focus and the card doesn't re-animate on every heartbeat.
+  function show(state, pill, key, build) {
+    $('unpair').hidden = !token;
+    if (rendered === state + key) return;
+    rendered = state + key;
+    app.dataset.state = state;
+    $('pill').textContent = pill;
+    $('main').replaceChildren(build());
+    requestAnimationFrame(() => parent.postMessage({ pluginMessage: { type: 'resize', height: document.body.scrollHeight } }, '*'));
+  }
+
+  async function send(snap) {
+    if (!token) return show('unpaired', 'Not paired', 'pair', () => pairCard('Run ', ' in Claude Code, then paste the token here.'));
+    try {
+      const res = await fetch(BRIDGE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tether-Token': token },
+        body: JSON.stringify(snap),
+      });
+      if (res.status === 401) return show('rejected', 'Token rejected', 'rejected', () => pairCard('That token no longer matches. Run ', ' again and paste the new one.'));
+      if (!res.ok) return show('offline', 'Error', 'err' + res.status, offlineCard);
+      const key = JSON.stringify([snap.selectionCount, snap.selection.slice(0, 3), snap.page.name]);
+      show('live', 'Live', key, () => selectionCard(snap));
+    } catch (_) {
+      show('offline', 'Offline', 'offline', offlineCard);
+    }
+  }
+
+  $('unpair').onclick = () => {
+    token = null;
+    parent.postMessage({ pluginMessage: { type: 'forget-token' } }, '*');
+  };
+
+  onmessage = ev => {
+    const msg = ev.data.pluginMessage;
+    if (!msg) return;
+    if (msg.type === 'token') token = msg.token;
+    if (msg.type === 'snapshot') send(msg.snapshot);
+  };
+  parent.postMessage({ pluginMessage: { type: 'ready' } }, '*');
+</script>

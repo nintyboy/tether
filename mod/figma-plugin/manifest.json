@@ -1,0 +1,15 @@
+{
+  "name": "Tether",
+  "id": "tether-dev",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "enablePrivatePluginApi": true,
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "devAllowedDomains": ["http://localhost:47821"],
+    "reasoning": "Sends the current selection (ids, names, types) to the Tether bridge on this machine"
+  }
+}

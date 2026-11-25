@@ -1,0 +1,11 @@
+{
+  "name": "tether",
+  "owner": { "name": "nintyboy" },
+  "plugins": [
+    {
+      "name": "tether",
+      "source": "./mod",
+      "description": "Your live Figma selection in Claude Code: shown beside the prompt and attached to your next message, like the IDE's selected lines"
+    }
+  ]
+}
