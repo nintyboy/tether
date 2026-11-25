@@ -3,6 +3,7 @@ import type { TestBody } from 'claude-code/testing'
 
 import type { FigmaSelection } from '../types'
 import { FIGMA_ICON } from './format'
+import { updateNotice } from './register'
 
 const SEL: FigmaSelection = {
   fileKey: 'AbCdEfGhIj0123456789xy',
@@ -193,4 +194,80 @@ test('/tether-pair shows the token the bridge wrote', async ($, on) => {
   const result = await $.command.run({ command: 'tether-pair', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
   expect(result.text).toContain('Pairing token: 0123456789abcdef0123456789abcdef')
   expect(result.text).toContain('/figma-plugin/manifest.json')
+})
+
+// The bridge's /health and /shutdown, plus what session.start needs beneath
+// it. The start-up check runs in the background, so tests wait for it.
+function bridgeHealth(on: On, health: { version: string | null; update: unknown }, mine = '0.2.0') {
+  const seen = { shutdown: 0, spawned: 0, toasts: [] as string[] }
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('ui.status', () => ({ value: undefined }))
+  on('command.register', (_: unknown, e: { name: string }) => ({ value: { command: e.name } }))
+  on('clock.every', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: 0 }))
+  on('clock.sleep', () => ({ value: undefined }))
+  on('env.get', () => ({ value: '/Users/test' }))
+  on('fs.read', () => ({ value: JSON.stringify({ version: mine }) }))
+  on('http.fetch', (_: unknown, e: { url: string }) => {
+    if (e.url.endsWith('/shutdown')) { seen.shutdown++; return { value: { status: 200, ok: true, headers: {}, text: '{"ok":true}' } } }
+    if (e.url.endsWith('/selection')) return { value: { status: 200, ok: true, headers: {}, text: '{"selection":null,"ageMs":null}' } }
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ ok: true, ...health }) } }
+  })
+  on('process.run', () => {
+    seen.spawned++
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('ui.toast', (_: unknown, e: { text: string }) => { seen.toasts.push(e.text); return { value: undefined } })
+  const store = new Map<string, unknown>()
+  on('store.get', (_: unknown, e: { key: string }) => ({ value: store.get(e.key) }))
+  on('store.set', (_: unknown, e: { key: string; value: unknown }) => { store.set(e.key, e.value); return { value: undefined } })
+  return seen
+}
+
+// The test kit's types leave out timers; the runtime has them.
+const { setTimeout: later } = globalThis as unknown as { setTimeout: (run: () => void, ms: number) => void }
+
+const startSession = async ($: Engine) => {
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await new Promise<void>(resolve => later(resolve, 50))
+}
+
+test('the update notice names the new version and the commands', () => {
+  expect(updateNotice(null)).toBeUndefined()
+  expect(updateNotice({ current: '0.1.0', latest: null, available: false })).toBeUndefined()
+  const text = updateNotice({ current: '0.1.0', latest: '0.2.0', available: true }) ?? ''
+  expect(text).toContain('Tether 0.2.0 is out (you have 0.1.0)')
+  expect(text).toContain('/plugin update tether')
+})
+
+test('a bridge from another version is asked to exit and replaced', async ($, on) => {
+  const seen = bridgeHealth(on, { version: '0.1.0', update: null })
+  await startSession($)
+  expect(seen.shutdown).toBe(1)
+  expect(seen.spawned).toBe(1)
+})
+
+test('a matching bridge is left alone', async ($, on) => {
+  const seen = bridgeHealth(on, { version: '0.2.0', update: null })
+  await startSession($)
+  expect(seen.shutdown).toBe(0)
+  expect(seen.spawned).toBe(0)
+  expect(seen.toasts.length).toBe(0)
+})
+
+test('an available update is announced once per version', async ($, on) => {
+  const seen = bridgeHealth(on, { version: '0.2.0', update: { current: '0.2.0', latest: '0.3.0', available: true } })
+  await startSession($)
+  await startSession($)
+  expect(seen.toasts.length).toBe(1)
+  expect(seen.toasts[0]).toContain('0.3.0')
+})
+
+test('/tether-updates off writes the switch the bridge reads', async ($, on) => {
+  const writes: { path: string; text: string }[] = []
+  on('env.get', () => ({ value: '/Users/test' }))
+  on('fs.write', (_: unknown, e: { path: string; text: string }) => { writes.push(e); return { value: undefined } })
+  const result = await $.command.run({ command: 'tether-updates', args: 'off', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+  expect(writes).toEqual([{ path: '/Users/test/.tether/update-check', text: 'off\n' }])
+  expect(result.text).toContain('no longer check')
 })

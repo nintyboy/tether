@@ -1,0 +1,26 @@
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Tag matches the plugin version
+        run: |
+          version=$(node -p "require('./mod/.claude-plugin/plugin.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME but mod/.claude-plugin/plugin.json says $version. Use npm run release."
+            exit 1
+          fi
+      - name: Bridge tests
+        run: node --test test/
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Tether ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag

@@ -2,6 +2,12 @@
   "name": "tether",
   "version": "0.1.0",
   "description": "Your live Figma selection in Claude Code: shown beside the prompt and attached to your next message, like the IDE's selected lines",
+  "author": {
+    "name": "nintyboy",
+    "url": "https://github.com/nintyboy"
+  },
+  "repository": "https://github.com/nintyboy/tether",
+  "homepage": "https://nintyboy.github.io/tether/",
   "types": "./types/index.d.ts",
   "license": "MIT"
 }

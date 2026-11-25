@@ -1,11 +1,13 @@
 {
   "name": "tether",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "npm run test:bridge && npm run test:mod",
     "test:bridge": "node --test test/",
     "test:mod": "claude plugin test mod",
-    "bridge": "node mod/bridge/daemon.mjs"
+    "bridge": "node mod/bridge/daemon.mjs",
+    "release": "node scripts/release.mjs"
   }
 }

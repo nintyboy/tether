@@ -159,3 +159,30 @@ test('/status serves one plain line, empty when nothing is selected or stale', (
 test('/status is not served over TCP', () => withBridge(async ({ bridge }) => {
   assert.equal((await call({ port: bridge.port, path: '/status' })).status, 404);
 }));
+
+test('health reports the version and update status; the plugin hears about updates too', async () => {
+  const updates = { status: () => ({ current: '0.1.0', latest: '0.2.0', available: true }) };
+  await withBridge(async ({ bridge }) => {
+    const health = await call({ socketPath: bridge.socketPath, path: '/health' });
+    assert.deepEqual(health.json, { ok: true, version: '0.1.0', update: { current: '0.1.0', latest: '0.2.0', available: true } });
+    const write = await call({ port: bridge.port, method: 'POST', path: '/selection', headers: { 'X-Tether-Token': bridge.token }, body: payload });
+    assert.equal(write.json.update.latest, '0.2.0');
+  }, { version: '0.1.0', updates });
+});
+
+test('without an update checker, health still answers', () => withBridge(async ({ bridge }) => {
+  const health = await call({ socketPath: bridge.socketPath, path: '/health' });
+  assert.deepEqual(health.json, { ok: true, version: null, update: null });
+}));
+
+test('the socket owner can ask the bridge to make way; TCP cannot', async () => {
+  let asked = 0;
+  await withBridge(async ({ bridge }) => {
+    const viaTcp = await call({ port: bridge.port, method: 'POST', path: '/shutdown', headers: { 'X-Tether-Token': bridge.token } });
+    assert.equal(viaTcp.status, 404);
+    const viaSocket = await call({ socketPath: bridge.socketPath, method: 'POST', path: '/shutdown' });
+    assert.equal(viaSocket.status, 200);
+    await new Promise(r => setImmediate(r));
+    assert.equal(asked, 1);
+  }, { onShutdown: () => { asked++; } });
+});

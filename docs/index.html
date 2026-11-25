@@ -325,6 +325,7 @@
       <div class="reveal"><h3>Can it change my file?</h3><p>No. The plugin only reads the selection. Edits happen only if you ask Claude to make them through Figma's own tools.</p></div>
       <div class="reveal"><h3>Does it work with the Figma MCP server?</h3><p>Yes, and it's better together. Tether sends exact node ids, so Claude can pull layout, styles or a screenshot for the layers you mean.</p></div>
       <div class="reveal"><h3>What if a layer name says something sneaky?</h3><p>Names are quoted and marked as data, so a layer called "ignore previous instructions" stays just a name.</p></div>
+      <div class="reveal"><h3>How do I update?</h3><p>Tether tells you when a new version is out. Run <span class="mono">/plugin marketplace update tether</span>, then <span class="mono">/plugin update tether</span>, and restart. The Figma plugin updates with it.</p></div>
       <div class="reveal"><h3>How do I unpair?</h3><p>Press Unpair in the plugin, or delete <span class="mono">~/.tether/token</span> to revoke every paired copy.</p></div>
     </div>
   </div>
@@ -375,8 +376,8 @@
   // Light, cookieless analytics: page views, how far people scroll, install
   // command copies and clicks through to GitHub. Nothing is stored in the
   // browser, there is no session recording, and Do Not Track is respected.
-  const POSTHOG_KEY = '';
-  const POSTHOG_HOST = 'https://us.i.posthog.com';
+  const POSTHOG_KEY = 'phc_sQq3TpATpspZgTkhh4zfv6UT3taUqyvyZz6pFMpj7pUQ';
+  const POSTHOG_HOST = 'https://eu.i.posthog.com';
   function track(event, props) { if (window.posthog && window.posthog.capture) window.posthog.capture(event, props); }
   if (POSTHOG_KEY) {
     const s = document.createElement('script');

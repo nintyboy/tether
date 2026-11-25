@@ -24,6 +24,22 @@ You need the Figma desktop app, Claude Code 2.1.275 or later, and Node 18+.
 
 Pair once per machine; it works for every file.
 
+## Updating
+
+When a new version is out, Tether says so once, beside the prompt and in the
+Figma plugin. To update:
+
+```
+/plugin marketplace update tether
+/plugin update tether
+```
+
+then restart Claude Code. The Figma plugin updates with it: Tether keeps it in
+`~/.tether/figma-plugin`, a folder that stays put across versions, so there is
+nothing to re-import. To check for updates, Tether asks GitHub for the latest
+release about twice a day and sends nothing else; `/tether-updates off` turns
+that off.
+
 ## What Claude sees
 
 When your selection changed since your last message, Tether adds a short block
@@ -72,7 +88,8 @@ To revoke pairing, delete `~/.tether/token` and restart the bridge
 
 ## Analytics
 
-Tether itself sends nothing anywhere. Two things are measured, both outside the tool:
+Tether sends nothing about you or your files anywhere; its only request is the
+update check above. Two things are measured, both outside the tool:
 
 - **The site** counts page views, scroll depth, install-command copies and
   clicks to GitHub with PostHog, cookieless and without session recording.
@@ -81,6 +98,10 @@ Tether itself sends nothing anywhere. Two things are measured, both outside the 
   only keeps 14 days of it.
 
 ## Development
+
+Release with `npm run release 0.2.0`: it bumps the version, runs the tests,
+tags and pushes, and `.github/workflows/release.yml` publishes the GitHub
+Release that running copies check for.
 
 ```
 npm test        # bridge tests (node --test) and mod tests (claude plugin test)

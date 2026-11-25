@@ -77,6 +77,12 @@
   .link { background: none; padding: 0; color: var(--muted); font-weight: 500; }
   .link:hover { color: var(--fg); }
 
+  .update {
+    display: none; margin-top: 10px; padding: 8px 10px; border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--fg); font-size: 11px; line-height: 1.4;
+  }
+  .update.on { display: block; animation: rise 220ms cubic-bezier(.2, .8, .2, 1); }
+  .update b { font-weight: 600; }
   footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; color: var(--faint); font-size: 11px; }
 
   @media (prefers-reduced-motion: reduce) {
@@ -97,6 +103,7 @@
     <span class="pill"><span class="dot"></span><span id="pill">Starting</span></span>
   </header>
   <main id="main"></main>
+  <div class="update" id="update" role="status"></div>
   <footer>
     <span>Read-only · stays on this Mac</span>
     <button class="link" id="unpair" hidden>Unpair</button>
@@ -158,6 +165,19 @@
 
   // Only rebuild when something visible changed, so the token field keeps
   // focus and the card doesn't re-animate on every heartbeat.
+  // The bridge says when a newer Tether is out; this plugin never goes online.
+  let shownUpdate = null;
+  function showUpdate(update) {
+    const latest = update && update.available ? update.latest : null;
+    if (latest === shownUpdate) return;
+    shownUpdate = latest;
+    const box = $('update');
+    box.classList.toggle('on', !!latest);
+    box.replaceChildren();
+    if (latest) box.append(el('b', {}, `Tether ${latest} is out.`), ' In Claude Code run ', el('code', {}, '/plugin marketplace update tether'), ' then ', el('code', {}, '/plugin update tether'), '.');
+    rendered = '';
+  }
+
   function show(state, pill, key, build) {
     $('unpair').hidden = !token;
     if (rendered === state + key) return;
@@ -179,6 +199,7 @@
       if (res.status === 401) return show('rejected', 'Token rejected', 'rejected', () => pairCard('That token no longer matches. Run ', ' again and paste the new one.'));
       if (!res.ok) return show('offline', 'Error', 'err' + res.status, offlineCard);
       const key = JSON.stringify([snap.selectionCount, snap.selection.slice(0, 3), snap.page.name]);
+      showUpdate((await res.json().catch(() => ({}))).update);
       show('live', 'Live', key, () => selectionCard(snap));
     } catch (_) {
       show('offline', 'Offline', 'offline', offlineCard);

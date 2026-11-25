@@ -12,10 +12,11 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { MAX_BODY_BYTES, sanitize, statusLine, view } from './core.mjs';
+import { createUpdateChecker, readManifest, syncFigmaPlugin } from './updates.mjs';
 
 export const DEFAULT_PORT = 47821;
 const IDLE_EXIT_MS = 10 * 60_000;
@@ -68,7 +69,10 @@ export async function startBridge({
   now = () => Date.now(),
   idleExitMs = IDLE_EXIT_MS,
   onIdle = () => {},
+  onShutdown = () => {},
   log = () => {},
+  version = null,
+  updates = null,
 } = {}) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(dir, 0o700);
@@ -76,6 +80,7 @@ export async function startBridge({
   const socketPath = join(dir, 'bridge.sock');
   let latest = null;
   let lastRead = now();
+  const updateStatus = () => (updates ? updates.status() : null);
 
   const writer = (req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(204, CORS).end(); return; }
@@ -96,13 +101,20 @@ export async function startBridge({
       const { snapshot, error } = sanitize(payload);
       if (error) { send(res, 400, { error }, CORS); return; }
       latest = { snapshot, receivedAt: now() };
-      send(res, 200, { ok: true }, CORS);
+      send(res, 200, { ok: true, update: updateStatus() }, CORS);
     });
   };
 
   const reader = (req, res) => {
     lastRead = now();
-    if (req.method === 'GET' && req.url === '/health') { send(res, 200, { ok: true }); return; }
+    if (req.method === 'GET' && req.url === '/health') { send(res, 200, { ok: true, version, update: updateStatus() }); return; }
+    // The mod asks an older bridge to step aside after an update. Only the
+    // socket's owner can reach this.
+    if (req.method === 'POST' && req.url === '/shutdown') {
+      send(res, 200, { ok: true });
+      setImmediate(onShutdown);
+      return;
+    }
     if (req.method === 'GET' && req.url === '/selection') { send(res, 200, view(latest, now())); return; }
     // Plain text for status bars (ccstatusline and the like): "" when nothing is selected.
     if (req.method === 'GET' && req.url === '/status') {
@@ -154,12 +166,23 @@ function isMain() {
 
 if (isMain()) {
   const log = msg => console.log(`${new Date().toISOString()} ${msg}`);
+  const dir = join(homedir(), '.tether');
+  const root = dirname(dirname(fileURLToPath(import.meta.url)));
+  const { version, repo } = readManifest(root);
+  const updates = createUpdateChecker({ dir, current: version, repo });
   try {
     const bridge = await startBridge({
+      dir,
+      version,
+      updates,
       port: process.env.TETHER_PORT ? Number(process.env.TETHER_PORT) : DEFAULT_PORT,
       log,
       onIdle: async () => { log('no readers for 10 min, exiting'); await bridge.close(); process.exit(0); },
+      onShutdown: async () => { log('asked to make way for a newer bridge, exiting'); await bridge.close(); process.exit(0); },
     });
+    log(`version ${version}; Figma plugin at ${syncFigmaPlugin(root, dir)}`);
+    updates.check();
+    setInterval(() => updates.check(), 60 * 60_000).unref();
     for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, async () => { await bridge.close(); process.exit(0); });
   } catch (err) {
     if (err.code === 'EADDRINUSE') { log('a bridge is already running'); process.exit(0); }
