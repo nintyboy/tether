@@ -10,6 +10,8 @@ const RESPAWN_EVERY_MS = 30_000
 // How often to ask the bridge whether an update is out (it asks GitHub itself,
 // at most twice a day).
 const HEALTH_EVERY_POLLS = 60
+// Must match the bridge's TCP port (bridge/daemon.mjs).
+const BRIDGE_PORT = 47821
 
 type UpdateStatus = { current: string; latest: string | null; available: boolean }
 type Health = { version: string | null; update: UpdateStatus | null }
@@ -48,6 +50,42 @@ async function startBridge($: EngineInterface): Promise<void> {
     .catch(err => $.ui.log(`${PLUGIN}: could not start the bridge: ${String(err)}`, { to: 'debug' }))
 }
 
+// Figma remembers the manifest path, so the plugin lives in a folder that does
+// not move between versions. The bridge copies it too; copying here as well
+// means it is there on a first install even before the bridge is up.
+async function copyFigmaPlugin($: EngineInterface): Promise<void> {
+  const dir = await dirOf($)
+  await $.process
+    .run(
+      ['/bin/sh', '-c', 'mkdir -p "$2/figma-plugin" && chmod 700 "$2" && cp -R "$1/." "$2/figma-plugin/"', 'sh', `${$.plugin.root}/figma-plugin`, dir],
+      { timeoutMs: 5000 },
+    )
+    .catch(err => $.ui.log(`${PLUGIN}: could not copy the Figma plugin: ${String(err)}`, { to: 'debug' }))
+}
+
+export function isTetherBridge(command: string): boolean {
+  return /(^|[\s/])bridge\/daemon\.mjs(\s|$)/.test(command)
+}
+
+// Bridges from before /shutdown existed ignore the request. Find whatever
+// listens on the bridge port and stop it, but only if it is a Tether bridge.
+async function forceStopBridge($: EngineInterface): Promise<boolean> {
+  const found = await $.process
+    .run(
+      ['/bin/sh', '-c', 'pid=$(lsof -nP -t -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | head -n 1); [ -n "$pid" ] && printf "%s\\t%s" "$pid" "$(ps -o command= -p "$pid")"', 'sh', String(BRIDGE_PORT)],
+      { timeoutMs: 5000 },
+    )
+    .catch(() => null)
+  const [pid, command = ''] = (found?.stdout ?? '').trim().split('\t')
+  if (!pid || !/^\d+$/.test(pid)) return false
+  if (!isTetherBridge(command)) {
+    $.ui.log(`${PLUGIN}: port ${BRIDGE_PORT} is held by something else, left alone: ${command}`, { to: 'debug' })
+    return false
+  }
+  await $.process.run(['kill', pid], { timeoutMs: 5000 }).catch(() => undefined)
+  return true
+}
+
 async function ownVersion($: EngineInterface): Promise<string | null> {
   try {
     return (JSON.parse(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)) as { version?: string }).version ?? null
@@ -78,6 +116,13 @@ async function replaceStaleBridge($: EngineInterface, health: Health): Promise<b
   if (!mine || health.version === mine) return false
   await bridgeCall($, '/shutdown', 'POST').catch(() => undefined)
   await $.clock.sleep(300)
+  const stillUp = await fetchHealth($)
+  if (stillUp?.version === mine) return true // another session already started ours
+  if (stillUp) {
+    // Too old to know /shutdown. Never start ours over something we left running.
+    if (!(await forceStopBridge($))) return true
+    await $.clock.sleep(300)
+  }
   await startBridge($)
   return true
 }
@@ -131,6 +176,7 @@ export const register: Register = on => {
     })
 
     void (async () => {
+      await copyFigmaPlugin($)
       if (!(await refresh($)).isUp) {
         lastSpawn = await $.clock.now()
         await startBridge($)
@@ -157,6 +203,7 @@ export const register: Register = on => {
       await startBridge($)
       await $.clock.sleep(800)
     }
+    await copyFigmaPlugin($)
     const token = (await $.fs.read(`${dir}/token`).catch(() => '')).toString().trim()
     if (!/^[0-9a-f]{32}$/.test(token)) {
       return { text: `The bridge has not written a token yet. Check ${dir}/bridge.log, or start it by hand with: node "${$.plugin.root}/bridge/daemon.mjs"` }
@@ -167,6 +214,7 @@ export const register: Register = on => {
         '',
         'First time only, in the Figma desktop app: Plugins → Development → Import plugin from manifest…, and pick',
         `  ${dir}/figma-plugin/manifest.json`,
+        '.tether is a hidden folder: in the file picker press ⌘⇧G (Cmd+Shift+G), paste the path above and press Return.',
         '(This folder stays put across Tether updates, so the import keeps working.)',
         'Then run Plugins → Development → Tether, paste the token and press Pair.',
         '',

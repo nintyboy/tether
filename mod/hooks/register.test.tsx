@@ -3,7 +3,7 @@ import type { TestBody } from 'claude-code/testing'
 
 import type { FigmaSelection } from '../types'
 import { FIGMA_ICON } from './format'
-import { updateNotice } from './register'
+import { isTetherBridge, updateNotice } from './register'
 
 const SEL: FigmaSelection = {
   fileKey: 'AbCdEfGhIj0123456789xy',
@@ -194,14 +194,19 @@ test('/tether-pair shows the token the bridge wrote', async ($, on) => {
   const result = await $.command.run({ command: 'tether-pair', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
   expect(result.text).toContain('Pairing token: 0123456789abcdef0123456789abcdef')
   expect(result.text).toContain('/figma-plugin/manifest.json')
+  expect(result.text).toContain('⌘⇧G')
 })
 
 // The bridge's /health and /shutdown, plus what session.start needs beneath
 // it. The start-up check runs in the background, so tests wait for it.
-function bridgeHealth(on: On, health: { version: string | null; update: unknown }, mine = '0.2.0') {
-  const seen = { shutdown: 0, spawned: 0, toasts: [] as string[] }
+type BridgeOptions = { mine?: string; ignoresShutdown?: boolean; listener?: string }
+
+function bridgeHealth(on: On, health: { version: string | null; update: unknown }, { mine = '0.2.0', ignoresShutdown = false, listener = '' }: BridgeOptions = {}) {
+  const seen = { shutdown: 0, spawned: 0, copied: 0, killed: [] as string[], toasts: [] as string[] }
+  let up = true
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
   on('ui.status', () => ({ value: undefined }))
+  on('ui.log', () => ({ value: undefined }))
   on('command.register', (_: unknown, e: { name: string }) => ({ value: { command: e.name } }))
   on('clock.every', () => ({ value: undefined }))
   on('clock.now', () => ({ value: 0 }))
@@ -209,13 +214,25 @@ function bridgeHealth(on: On, health: { version: string | null; update: unknown 
   on('env.get', () => ({ value: '/Users/test' }))
   on('fs.read', () => ({ value: JSON.stringify({ version: mine }) }))
   on('http.fetch', (_: unknown, e: { url: string }) => {
-    if (e.url.endsWith('/shutdown')) { seen.shutdown++; return { value: { status: 200, ok: true, headers: {}, text: '{"ok":true}' } } }
+    if (!up) throw new Error('ECONNREFUSED')
+    if (e.url.endsWith('/shutdown')) {
+      seen.shutdown++
+      // Bridges from before /shutdown existed answer 404 and keep running.
+      if (ignoresShutdown) return { value: { status: 404, ok: false, headers: {}, text: '{"error":"not found"}' } }
+      up = false
+      return { value: { status: 200, ok: true, headers: {}, text: '{"ok":true}' } }
+    }
     if (e.url.endsWith('/selection')) return { value: { status: 200, ok: true, headers: {}, text: '{"selection":null,"ageMs":null}' } }
     return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ ok: true, ...health }) } }
   })
-  on('process.run', () => {
-    seen.spawned++
-    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  on('process.run', (_: unknown, e: { argv: readonly string[] }) => {
+    const script = e.argv.join(' ')
+    let stdout = ''
+    if (e.argv[0] === 'kill') { seen.killed.push(e.argv[1] ?? ''); up = false }
+    else if (script.includes('lsof')) stdout = listener
+    else if (script.includes('cp -R')) seen.copied++
+    else if (script.includes('daemon.mjs')) { seen.spawned++; up = true; health = { ...health, version: mine } }
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('ui.toast', (_: unknown, e: { text: string }) => { seen.toasts.push(e.text); return { value: undefined } })
   const store = new Map<string, unknown>()
@@ -244,7 +261,38 @@ test('a bridge from another version is asked to exit and replaced', async ($, on
   const seen = bridgeHealth(on, { version: '0.1.0', update: null })
   await startSession($)
   expect(seen.shutdown).toBe(1)
+  expect(seen.killed.length).toBe(0)
   expect(seen.spawned).toBe(1)
+})
+
+test('an old bridge that ignores /shutdown is stopped and replaced', async ($, on) => {
+  const seen = bridgeHealth(on, { version: null, update: null }, { ignoresShutdown: true, listener: '4242\tnode /Users/test/.claude/plugins/cache/tether/tether/0.1.0/bridge/daemon.mjs' })
+  await startSession($)
+  expect(seen.shutdown).toBe(1)
+  expect(seen.killed).toEqual(['4242'])
+  expect(seen.spawned).toBe(1)
+})
+
+test('something else on the bridge port is never stopped', async ($, on) => {
+  const seen = bridgeHealth(on, { version: null, update: null }, { ignoresShutdown: true, listener: '4242\tpython3 -m http.server 47821' })
+  await startSession($)
+  expect(seen.killed.length).toBe(0)
+  expect(seen.spawned).toBe(0)
+})
+
+test('the Figma plugin is copied to its fixed folder at session start', async ($, on) => {
+  const seen = bridgeHealth(on, { version: '0.2.0', update: null })
+  await startSession($)
+  expect(seen.copied).toBe(1)
+})
+
+test('only a Tether bridge command counts as one', () => {
+  expect(isTetherBridge('node /x/tether/0.2.0/bridge/daemon.mjs')).toBe(true)
+  expect(isTetherBridge('node mod/bridge/daemon.mjs')).toBe(true)
+  expect(isTetherBridge('node bridge/daemon.mjs')).toBe(true)
+  expect(isTetherBridge('node /x/otherbridge/daemon.mjs')).toBe(false)
+  expect(isTetherBridge('node /x/bridge/daemon.mjs.bak')).toBe(false)
+  expect(isTetherBridge('python3 -m http.server 47821')).toBe(false)
 })
 
 test('a matching bridge is left alone', async ($, on) => {

@@ -19,6 +19,8 @@ You need the Figma desktop app, Claude Code 2.1.275 or later, and Node 18+.
 2. Run `/tether-pair`. It prints a pairing token and the path to the Figma plugin.
 3. In Figma desktop: **Plugins → Development → Import plugin from manifest…** and
    pick the `manifest.json` path `/tether-pair` printed. (First time only.)
+   It lives in a hidden folder, `~/.tether/figma-plugin`: in the file picker press
+   **⌘⇧G** (Cmd+Shift+G), paste the path and press Return.
 4. Run **Plugins → Development → Tether**, paste the token, press **Pair**. Keep the
    plugin open while you work.
 

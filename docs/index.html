@@ -197,6 +197,7 @@
     .caret { animation: none; }
     .btn:active, .copy:active { transform: none; }
   }
+  kbd { font: 600 0.85em/1 ui-monospace, "SF Mono", Menlo, monospace; padding: 2px 6px; margin: 0 1px; border-radius: 5px; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-bottom-width: 2px; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -311,7 +312,7 @@
       <li class="reveal"><div><strong>Install the mod in Claude Code</strong>
         <div class="cmd"><code>/plugin install tether --marketplace nintyboy/tether</code><button class="copy" data-copy="/plugin install tether --marketplace nintyboy/tether">Copy</button></div></div></li>
       <li class="reveal"><div><strong>Run <span class="mono">/tether-pair</span></strong><p>It prints your pairing token and where the Figma plugin lives.</p></div></li>
-      <li class="reveal"><div><strong>Import the Figma plugin</strong><p>In Figma desktop: Plugins → Development → Import plugin from manifest…, then pick the path from step 2.</p></div></li>
+      <li class="reveal"><div><strong>Import the Figma plugin</strong><p>In Figma desktop: Plugins → Development → Import plugin from manifest…. The plugin is in a hidden folder, so in the file picker press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd>, paste the path from step 2 and press Return.</p></div></li>
       <li class="reveal"><div><strong>Pair</strong><p>Run Plugins → Development → Tether, paste the token, press Pair. Keep it open while you work.</p></div></li>
     </ol>
     <p class="needs">Needs the Figma desktop app, Claude Code 2.1.275 or later, and Node 18+.</p>
